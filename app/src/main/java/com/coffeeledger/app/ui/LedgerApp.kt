@@ -18,7 +18,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -179,11 +178,11 @@ fun LedgerApp(
 
                 composable(Routes.TRANSACTION_DETAIL) { entry ->
                     val id = entry.arguments?.getString("id").orEmpty()
-                    val txn by produceState<Txn?>(null, id, state.snapshot.transactions) {
-                        value = viewModel.transaction(id)
-                    }
-                    val raw by produceState<String?>(null, id) {
-                        value = viewModel.rawMessage(id)
+                    var txn by remember(id) { mutableStateOf<Txn?>(null) }
+                    var raw by remember(id) { mutableStateOf<String?>(null) }
+                    LaunchedEffect(id, state.snapshot.transactions) {
+                        txn = viewModel.transaction(id)
+                        raw = viewModel.rawMessage(id)
                     }
                     txn?.let { transaction ->
                         TransactionDetailScreen(
