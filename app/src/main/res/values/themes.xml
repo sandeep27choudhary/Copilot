@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        The window theme only has to hand over to Compose without a flash of the wrong
+        colour, so it sets the paper background and gets out of the way.
+    -->
+    <style name="Theme.CoffeeLedger" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/coffee_cream</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:colorAccent">@color/coffee_accent</item>
+    </style>
+</resources>

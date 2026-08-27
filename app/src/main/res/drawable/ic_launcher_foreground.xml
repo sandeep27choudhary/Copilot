@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A cup on a saucer, drawn in the accent brown. Nothing else fits a coffee ledger. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#7A5A40"
+        android:pathData="M36,38h30a2,2 0,0 1,2 2v12a17,17 0,0 1,-17 17h0a17,17 0,0 1,-17 -17v-12a2,2 0,0 1,2 -2z" />
+    <path
+        android:fillColor="#7A5A40"
+        android:pathData="M70,42h4a8,8 0,0 1,8 8v2a8,8 0,0 1,-8 8h-4v-5h4a3,3 0,0 0,3 -3v-2a3,3 0,0 0,-3 -3h-4z" />
+    <path
+        android:fillColor="#7A5A40"
+        android:pathData="M30,73h48a2.5,2.5 0,0 1,0 5h-48a2.5,2.5 0,0 1,0 -5z" />
+</vector>

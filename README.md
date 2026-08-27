@@ -1,40 +1,168 @@
+# Ledger
 
+A minimalist, privacy-first personal finance tracker and advisor for Android.
 
+Transactions are collected from bank SMS, UPI apps, CSV exports and PDF statements,
+then parsed, categorised, analysed and answered questions about **entirely on the
+device**. There is no account, no server, and no network permission.
 
+---
 
-Internal Copilot Skill Marketplace & Analytics Architecture
-Your platform needs a unified data and control plane so that every Copilot skill is cataloged, executed, and reported consistently. For example, leverage GitHub’s official Copilot usage metrics API to pull enterprise-wide data on IDE and CLI usage. GitHub provides endpoints to download daily and 28-day Copilot reports (NDJSON) covering feature usage (completions, chat, CLI, agents), user engagement, IDE breakdown, languages, and more. These reports (available via signed URLs) include per-day and rolling window data on active users, tokens consumed, and adoption by feature, IDE and model. In practice you would use the “Get Copilot enterprise usage metrics” and related endpoints to programmatically ingest organization, team, and user-level usage. (There are also user-to-team join reports to map each user to their team.) This official telemetry fills in gaps (e.g. server-side counts for offline users) and can be joined with your own logs. In short, pull Copilot metrics such as daily active users, completions accepted, code-generation counts, chat invocations, PR throughput, etc., from GitHub’s API.
+## The privacy model
 
-Marketplace Control Plane and Shared Runtime
-Treat your internal skill marketplace like a service catalog/IDP. In the control plane you store metadata for each skill: skill ID and name, description, owner and owning team, category, version, source repo and commit, supported IDEs, tags/business use case, status (dev/GA/deprecated), etc. This is analogous to an automated developer portal catalog: the IDP ingests data from source repos and CI/CD to populate a registry of services. For example, an IDP might scan GitLab repos and CI pipelines to auto-discover new skills and capture metadata (name, repo path, owner team, business domain). Use custom fields (like in OpsLevel or Harness) to enforce that every skill record includes required info (owner, version, repo URL, tags) and workflows for publishing new versions. This catalog also enforces governance (who can publish, approve states, etc.) and will drive the marketplace UI and API. As one example, Anthropic’s Claude Code architecture explicitly supports multiple marketplaces (default plus internal/private ones) and uses a “manifest” in a Git repo to list each plugin. You can do likewise: maintain a git-backed manifest or database of all internal skills.
+The guarantee is enforced by the platform, not by a policy page:
 
-The shared runtime/SDK is equally critical. All skills should use the same wrapper or instrumentation library so telemetry is uniform. This is like using an OpenTelemetry or tracing SDK: every execution emits the same structured event schema. For instance, the AWS Bedrock AgentCore guidance explains that a shared runtime (hosting many tenants’ agents in one service) greatly reduces overhead but requires strict context propagation. In practice, your SDK wrapper should automatically capture skill-level context on each run: skill ID, execution ID, invoking user and team, IDE name, repository/branch/commit, timestamps, status/outcome, latency, error codes, token counts, etc. By embedding these fields as attributes or logs, you guarantee that every skill’s data is comparable and joinable. Without a common runtime, teams might log inconsistent fields, making analytics unreliable. (This matches the advice in OpenTelemetry guidance: code must be instrumented to emit standardized traces and metrics for observability.)
+| Claim | How it is enforced |
+| --- | --- |
+| No financial data leaves the device | `AndroidManifest.xml` declares **no `INTERNET` permission**, so the process cannot open a socket |
+| Transactions stored locally | Room over **SQLCipher**; every database page is encrypted at rest |
+| Encryption keys protected | 32 random bytes sealed with an **AES-GCM key inside the Android Keystore** that cannot be exported |
+| SMS processed locally | `SmsTransactionParser` is pure text processing; message bodies go to the encrypted database and nowhere else |
+| Analytics processed locally | `AnalyticsEngine`, `InsightGenerator`, `FinancialHealth` are pure functions over a `List<Txn>` |
+| Advisor processed locally | `LocalAdvisor` is rule-based intent matching over the in-memory ledger — no model call |
+| Not in cloud backup | `allowBackup="false"` plus `data_extraction_rules.xml` excluding every domain |
+| Erase means erase | "Delete all data" wipes the tables **and destroys the Keystore key**, so the file left behind cannot be decrypted |
 
-Telemetry Collector, Schema & Validation
-All skill executions push events to a central telemetry collector service. This collector should act as a gateway: it validates incoming payloads (against a defined JSON/Avro schema), enriches them (e.g. attach user/team from SSO), and stores/forwards them reliably. A good practice is to treat each event like an API request with a strict contract. Define a schema (data contract) for each event type (skill execution, skill step, etc.) that specifies required and optional fields, types, and constraints. Then, at ingestion time the collector should reject or route invalid events to a dead-letter queue rather than silently fail. Using a schema registry or validation layer (e.g. Confluent, JSON Schema, dbt tests) ensures you catch mismatches early.
+The Privacy screen lists each of these alongside the live state of every permission.
 
-Design the pipeline for idempotency and fault tolerance: require a unique execution_id per event, and dedupe repeated submissions. For example, use a message broker (Kafka, Kinesis, etc.) with retries and a DLQ so that transient failures don’t drop data. The collector can enrich events with metadata (e.g. mapping GitHub login to internal user ID, attaching team from HR directory, normalizing repo names). It should write raw, validated events to a fast operational store (like a time-series DB or “bronze” table) and also forward them to your ETL pipeline. Include extensive logging and DLQ monitoring so bad data can be triaged. In short, apply data engineering best practices to telemetry: schema enforcement, deduplication by key, dead-letter queue for errors, and observability on the pipeline itself.
+---
 
-Analytics Storage, ETL and Cost Attribution
-For analytics, use a star-schema data warehouse or lakehouse. Create dimension tables for the “who” and “what”: e.g. dim_skill (skill_id, name, category, owner, team, repo, version, status, tags), dim_user (user_id, name, email, GitHub/GitLab login, team), dim_team (team_id, name, manager, department), dim_ide (ide_id, name, plugin_version), dim_repo (repo_id, name, default branch). These dims map to your catalog and identity systems. Then define fact tables for events: e.g. fact_skill_execution (execution_id, skill_id, user_id, team_id, ide_id, repo_id, start_time, end_time, duration, status, error_code, outcome, workflow_type, tokens_used, token_cost, etc.) and fact_skill_step for multi-step workflows. Also ingest Copilot-specific facts: a fact_copilot_usage_daily table (date, user_id, team_id, ide, language, feature, model, active_users, engaged_users, completions_count, chat_count, token_usage, etc.) and fact_pr_metrics_daily (date, team_id, PRs_created, PRs_merged, avg_merge_time, copilot_activities). Finally track fact_cost_daily per skill/user (date, skill_id, user_id, team_id, token_cost, runtime_cost, infra_cost, total_cost). These tables let analysts slice and dice across skills, users, teams and time.
+## Architecture
 
-Load and transform data using an ELT pipeline: first Extract/Load raw telemetry and Copilot reports into a central lake/warehouse (Snowflake, BigQuery, Redshift, etc.), then Transform with SQL or tools like dbt. This decouples ingestion from modeling. (As the dbt blog notes, ELT is now standard: raw data is loaded “as is,” then cleaned and joined inside the warehouse.) Use incremental jobs (Airflow, Step Functions, etc.) to merge daily files and Copilot NDJSON into the fact tables. Perform lookups against dimension tables (e.g. link GitHub usernames to your user table) during ETL. Also compute aggregates and derived metrics (e.g. daily cost by team, total tokens per skill per week).
+```
+SMS receiver / inbox scan ─┐
+UPI + bank messages        │
+CSV import ────────────────┼──▶ parser ──▶ merchant normaliser ──▶ categoriser
+PDF statement import       │                                            │
+manual entry ──────────────┘                                            ▼
+                                                    encrypted local database (Room + SQLCipher)
+                                                                        │
+                                        ┌───────────────────────────────┼───────────────────┐
+                                        ▼                               ▼                   ▼
+                                 analytics engine              tracker progress       local advisor
+                                        │                               │                   │
+                                        └───────────────────────────────┴───────────────────┘
+                                                                        ▼
+                                                              Compose UI (5 tabs)
+```
 
-Critically, cost attribution should be baked into your model. Track token usage per execution and convert it to dollar cost at ingestion time. For example, using OpenTelemetry’s GenAI conventions, capture gen_ai.usage.input_tokens and gen_ai.usage.output_tokens on every call, then compute gen_ai.usage.cost_usd via your pricing table and emit it as a metric. By tagging each span or event with skill, user, and feature, you can later aggregate “cost per user” or “cost per skill”. In practice, add columns like tokens_used and compute token_cost in your ETL (or in a view). Combine this with any compute/infrastructure cost (e.g. Lambda or container time) to get total_cost per run. A cost attribution model lets you answer “Is the ROI of this skill positive?” by comparing total value (time saved, PRs merged) to spend.
+Cloud connectivity is not merely optional — it is absent. The layering is such that an
+optional end-to-end encrypted backup could be added later as a new sink behind the
+repository, without any layer below it learning about the network.
 
-Dashboard Metrics, Reports and Rollout
-Finally, present these insights in a dashboard/UI for your stakeholders. Organize it into logical sections. For example:
+### Source layout
 
-Skill Overview: total executions, unique users, success rate, median duration, total/avg cost, cost-per-success. Highlight top skills by usage and flag high-cost/low-value outliers.
-Team Overview: usage counts and spend by team, active teams, adoption trends. Show which teams use which skills most (filter by team).
-IDE & Technology: split usage by IDE (VS Code vs IntelliJ), by feature (completion vs chat vs CLI), and by language/model usage, to see where skills are relied on.
-Copilot Trends: organization-wide Copilot adoption (DAU/MAU, trendlines), feature breakdowns, and how skill usage correlates with Copilot usage or PR metrics.
-Skill Leaderboard: rank skills by metrics (most-used, highest cost, best ROI, most failures). Call out underutilized or failing skills. As one article notes, “features with high engagement should be expanded, those with little use may warrant deprecation”.
-Adoption KPIs: track user engagement (DAU, active teams) and productivity metrics (time-to-complete tasks, PR throughput). Many platforms use DAU/MAU and funnel analytics to gauge adoption.
-Make the dashboard interactive: allow filtering by date, team, IDE, skill, etc. Visualization best practices apply: use time-series charts for trends, bar/treemap for breakdowns, and funnel or scatter plots to show cost vs usage. Include alerts or reports (e.g. monthly email) for admin owners when a skill’s failure rate spikes or costs exceed budget.
+```
+app/src/main/java/com/coffeeledger/app/
+  domain/            pure Kotlin, no Android imports, fully unit tested
+    money/           paise arithmetic and Indian digit grouping (₹1,20,000)
+    model/           Txn, Account, Category, Tracker, TrackerProgress
+    parse/           SMS parser, bank sender registry, date parser
+    normalize/       merchant catalog and normalisation
+    categorize/      rule precedence and self-transfer detection
+    analytics/       summaries, trends, recurring detection, insights, health score
+    advisor/         intent matching and answer construction
+    importer/        CSV parser, PDF text extractor, PDF statement parser
+    query/           timeline filtering
+  data/
+    security/        Keystore-backed database key manager
+    db/              Room entities, DAOs, SQLCipher open, entity <-> domain mappers
+    repo/            LedgerRepository, SettingsRepository
+    io/              JSON backup and CSV export/import
+    sample/          the seeded sample ledger
+  sms/               broadcast receiver and inbox scanner
+  ui/                Compose theme, components and the five screens
+```
 
-For rollout, take an iterative approach. Phase 1: implement the skill catalog UI/API, shared SDK wrapper, telemetry capture and a basic execution table. Build a simple dashboard showing total executions and active users. Phase 2: enrich analytics with breakdowns by user, team, IDE and daily trends; calculate cost per execution; start surfacing performance and adoption charts. Phase 3: ingest GitHub Copilot metrics (via the REST API), map identities, and join external data (e.g. team membership) so you can correlate internal skill usage with Copilot adoption. Phase 4: add advanced BI: skill value scoring (maybe a custom ROI metric), alerts (cost spikes, regressions), and historical benchmarking. At each phase involve stakeholders (skill owners, managers) to validate that the metrics answer their questions.
+---
 
-By the end, your analytics platform will let you answer the key questions from leadership and engineering: e.g. “Which skill is most valuable?”, “Which skills are too expensive for the benefit?”, “Which teams or IDEs drive the most usage?”, “Where should we invest to improve or retire skills?”, and “How does skill usage align with overall Copilot adoption?”. In short, build a robust data pipeline and dashboard that joins your internally captured skill telemetry with GitHub’s Copilot metrics, so you have end-to-end visibility of usage, cost and impact.
+## Features
 
-Sources: GitHub Copilot Usage Metrics API documentation, Copilot analytics best practices, multi-tenant AI architecture guidance, developer portal/service catalog patterns, telemetry/data ingestion best practices, data pipeline/ELT design, and cost-monitoring conventions for AI workloads, portal usage analytics advice.
+**Transaction engine.** One ledger for every bank and app. Each entry carries date, time,
+amount, direction, merchant (raw and normalised), category, account, payment method,
+reference, notes, source app and source type. De-duplication is keyed on the transaction
+reference where one exists, so re-scanning the inbox is idempotent.
+
+**SMS detection.** Handles the common Indian formats — HDFC, ICICI, SBI, Axis, Kotak and
+others — across UPI, card, ATM, IMPS/NEFT and auto-debit. It deliberately rejects OTPs,
+marketing, mandate notices, collect requests and failed payments, and it will not mistake
+`Avl Bal Rs.35,120.50` for the transaction amount. Anything it is unsure about is stored
+but flagged for review rather than dropped.
+
+**Merchant normalisation.** `BLINKIT COMMERCE PVT LTD`, `Blinkit Grocery` and `BLINKIT`
+all become **Blinkit**. Matching is token-based, so `AMAZONITE JEWELLERS` is not Amazon.
+
+**Credit, debit and transfers.** Transfers between the user's own accounts are detected and
+never counted as spending, anywhere — not in the dashboard, not in a tracker, not in an
+insight, not in an advisor answer.
+
+**Trackers.** One primitive covers a monthly cap, a category limit, a savings target and a
+long-running goal. Progress is derived from the ledger; goals can also hold a manually
+recorded starting amount.
+
+**Insights and health.** Pace against the calendar, category shifts, frequent merchants,
+recurring commitments, outliers and cash flow. The 0–100 health score always shows the five
+weighted components and the sentence explaining each one.
+
+**Advisor.** "Where did I spend the most?", "Can I afford a ₹60,000 purchase?", "What
+changed compared with last month?" — matched to an intent, answered from structured local
+data. Forward-looking answers are explicitly labelled as general information rather than
+investment advice.
+
+**Import and export.** CSV covers most bank exports (separate debit/credit columns, or a
+single amount column with a Dr/Cr marker or a sign). PDF import uses a **dependency-free
+extractor written for this app** — content streams are inflated and text operators replayed
+— rather than pulling in a third-party PDF library to handle financial documents. Export
+produces a readable JSON backup or a CSV you choose the location for.
+
+---
+
+## Design
+
+Coffee and paper. A warm cream page, slightly lighter cards, hairline warm-beige borders,
+dark brown ink and a single medium-coffee accent. Two muted signal colours (moss for money
+in, brick for over budget) and nothing else. Amounts are set in tabular figures so a column
+of numbers lines up, and the largest thing on any screen is always a number.
+
+The palette lives in `ui/theme/Color.kt`, the type scale in `ui/theme/Type.kt`. Meters are
+plain horizontal bars — a track and a fill — because the tracker is the centre of the
+product, not a chart gallery. The bottom bar is text-only for the same reason.
+
+---
+
+## Building
+
+```bash
+./gradlew assembleDebug
+```
+
+Requires the Android SDK (compileSdk 35, minSdk 26) and JDK 17+.
+
+---
+
+## Testing
+
+The whole domain layer is free of Android imports specifically so it can be tested as
+ordinary JVM code:
+
+```bash
+./gradlew :app:testDebugUnitTest
+```
+
+92 unit tests cover the SMS parser (real bank message formats, and the messages that must
+be rejected), merchant normalisation, categorisation precedence, transfer detection, money
+formatting, analytics, recurring detection, the health score, the advisor's intents, the
+timeline filter, the CSV importer and the PDF extractor (which is exercised against PDFs
+generated inside the test, both uncompressed and Flate-compressed).
+
+`SampleLedgerTest` pins the seeded ledger to the figures in the product brief — ₹78,632
+spent, ₹16,695 received, ₹61,937 net outflow, groceries at 93% of ₹15,000, food at 70% of
+₹6,000 — so a change to the sample data cannot silently drift away from them.
+
+---
+
+## Sample data
+
+A fresh install seeds three months of realistic transactions across four accounts so every
+screen has something to show before the first SMS is read. Remove it from
+**Settings → Sample data**; anything you added yourself is kept.

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Kept in step with Coffee.kt; only the window chrome reads these. -->
+    <color name="coffee_cream">#F6F1E8</color>
+    <color name="coffee_espresso">#3A2C21</color>
+    <color name="coffee_accent">#7A5A40</color>
+</resources>
