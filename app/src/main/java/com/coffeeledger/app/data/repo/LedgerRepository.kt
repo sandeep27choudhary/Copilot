@@ -70,8 +70,6 @@ class LedgerRepository(private val db: AppDatabase) {
         )
     }
 
-    fun observeReviewCount(): Flow<Int> = db.transactionDao().observeReviewCount()
-
     suspend fun transactionCount(): Int = db.transactionDao().count()
 
     suspend fun transaction(id: String): Txn? = db.transactionDao().byId(id)?.toDomain()
@@ -186,7 +184,7 @@ class LedgerRepository(private val db: AppDatabase) {
     suspend fun updateTransaction(updated: Txn, learnCategoryRule: Boolean) {
         val existing = db.transactionDao().byId(updated.id)
         db.transactionDao().upsert(
-            updated.copy(categorySource = CategorySource.USER).toEntity(
+            updated.copy(categorySource = CategorySource.USER, needsReview = false).toEntity(
                 needsReview = false,
                 confidence = existing?.confidence ?: 1f,
                 rawMessage = existing?.rawMessage,

@@ -13,6 +13,8 @@ data class TransactionFilter(
     val sourceApps: Set<String> = emptySet(),
     val accountIds: Set<String> = emptySet(),
     val range: TimeRange? = null,
+    /** Narrows to entries the parser was unsure about, so they can be corrected. */
+    val onlyNeedsReview: Boolean = false,
 ) {
     /** Direction, with transfers as their own choice because they are neither. */
     enum class Flow(val label: String) {
@@ -24,7 +26,7 @@ data class TransactionFilter(
 
     val isActive: Boolean
         get() = query.isNotBlank() || flow != Flow.ALL || categoryIds.isNotEmpty() ||
-            sourceApps.isNotEmpty() || accountIds.isNotEmpty() || range != null
+            sourceApps.isNotEmpty() || accountIds.isNotEmpty() || range != null || onlyNeedsReview
 
     val activeCount: Int
         get() = listOf(
@@ -34,11 +36,13 @@ data class TransactionFilter(
             sourceApps.isNotEmpty(),
             accountIds.isNotEmpty(),
             range != null,
+            onlyNeedsReview,
         ).count { it }
 
     fun apply(transactions: List<Txn>): List<Txn> = transactions.filter { matches(it) }
 
     private fun matches(txn: Txn): Boolean {
+        if (onlyNeedsReview && !txn.needsReview) return false
         if (!matchesFlow(txn)) return false
         if (categoryIds.isNotEmpty() && txn.category.id !in categoryIds) return false
         if (sourceApps.isNotEmpty() && txn.sourceApp !in sourceApps) return false

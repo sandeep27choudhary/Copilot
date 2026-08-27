@@ -109,6 +109,13 @@ fun TransactionsScreen(
                         onClick = { filter = filter.copy(flow = flow) },
                     )
                 }
+                if (state.needsReviewCount > 0) {
+                    CoffeeChip(
+                        text = "Check ${state.needsReviewCount}",
+                        selected = filter.onlyNeedsReview,
+                        onClick = { filter = filter.copy(onlyNeedsReview = !filter.onlyNeedsReview) },
+                    )
+                }
             }
             Spacer(Modifier.height(10.dp))
             Row(

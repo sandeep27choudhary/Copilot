@@ -45,9 +45,6 @@ interface TransactionDao {
 
     @Query("SELECT COUNT(*) FROM transactions")
     suspend fun count(): Int
-
-    @Query("SELECT COUNT(*) FROM transactions WHERE needsReview = 1")
-    fun observeReviewCount(): Flow<Int>
 }
 
 @Dao

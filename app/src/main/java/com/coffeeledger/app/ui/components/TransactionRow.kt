@@ -63,6 +63,10 @@ fun TransactionRow(
                     Spacer(Modifier.width(8.dp))
                     Tag(text = "Transfer")
                 }
+                if (txn.needsReview) {
+                    Spacer(Modifier.width(8.dp))
+                    Tag(text = "Check", caution = true)
+                }
             }
             Spacer(Modifier.height(3.dp))
             Text(

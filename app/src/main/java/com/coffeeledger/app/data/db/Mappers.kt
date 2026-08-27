@@ -45,10 +45,11 @@ fun TransactionEntity.toDomain(): Txn = Txn(
     reference = reference,
     notes = notes,
     isTransfer = isTransfer,
+    needsReview = needsReview,
 )
 
 fun Txn.toEntity(
-    needsReview: Boolean = false,
+    needsReview: Boolean = this.needsReview,
     confidence: Float = 1f,
     rawMessage: String? = null,
     smsSender: String? = null,

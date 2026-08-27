@@ -57,6 +57,15 @@ class TransactionFilterTest {
     }
 
     @Test
+    fun `the review filter narrows to flagged entries`() {
+        val flagged = txns.first().copy(id = "flagged", needsReview = true)
+        val filter = TransactionFilter(onlyNeedsReview = true)
+        val result = filter.apply(txns + flagged)
+        assertEquals(listOf("flagged"), result.map { it.id })
+        assertEquals(1, filter.activeCount)
+    }
+
+    @Test
     fun `a date range narrows to that window`() {
         val lastMonth = TimeRanges.previousMonth(now, zone)
         val result = TransactionFilter(range = lastMonth).apply(txns)

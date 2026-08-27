@@ -19,6 +19,7 @@ import com.coffeeledger.app.domain.parse.RejectionReason
 import com.coffeeledger.app.sms.SmsScanReport
 import com.coffeeledger.app.ui.components.BackRow
 import com.coffeeledger.app.ui.components.CoffeeButton
+import com.coffeeledger.app.ui.components.Formats
 import com.coffeeledger.app.ui.components.HairLine
 import com.coffeeledger.app.ui.components.PaperCard
 import com.coffeeledger.app.ui.components.QuietButton
@@ -39,6 +40,7 @@ fun SmsScreen(
     enabled: Boolean,
     permissionGranted: Boolean,
     busy: Boolean,
+    lastScanAt: Long,
     lastScan: SmsScanReport?,
     onRequestPermission: () -> Unit,
     onToggle: (Boolean) -> Unit,
@@ -99,7 +101,11 @@ fun SmsScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "A scan reads your existing messages once and adds anything not already in the ledger.",
+                    text = if (lastScanAt > 0L) {
+                        "Last scanned ${Formats.dateTime(lastScanAt)}. A scan re-reads your existing messages and adds anything not already in the ledger."
+                    } else {
+                        "A scan reads your existing messages once and adds anything not already in the ledger."
+                    },
                     style = CoffeeType.Caption,
                     color = colors.textTertiary,
                 )

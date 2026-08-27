@@ -105,6 +105,8 @@ data class Txn(
     val reference: String? = null,
     val notes: String? = null,
     val isTransfer: Boolean = false,
+    /** True when the parser was not confident. Shown in the list so it can be corrected. */
+    val needsReview: Boolean = false,
 ) {
     /** Signed amount: credits add, debits subtract. */
     val signedMinor: Long get() = if (direction == Direction.CREDIT) amountMinor else -amountMinor

@@ -59,6 +59,8 @@ data class LedgerUiState(
 ) {
     val monthLabel: String get() = thisMonth?.range?.label ?: ""
     val hasData: Boolean get() = snapshot.transactions.isNotEmpty()
+    /** Entries the SMS parser was unsure about and that are worth a glance. */
+    val needsReviewCount: Int get() = snapshot.transactions.count { it.needsReview }
     /** The unfiltered monthly cap, which the dashboard meter tracks. */
     val monthlyTracker: TrackerProgress?
         get() = trackers.firstOrNull {

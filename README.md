@@ -149,7 +149,7 @@ ordinary JVM code:
 ./gradlew :app:testDebugUnitTest
 ```
 
-92 unit tests cover the SMS parser (real bank message formats, and the messages that must
+93 unit tests cover the SMS parser (real bank message formats, and the messages that must
 be rejected), merchant normalisation, categorisation precedence, transfer detection, money
 formatting, analytics, recurring detection, the health score, the advisor's intents, the
 timeline filter, the CSV importer and the PDF extractor (which is exercised against PDFs

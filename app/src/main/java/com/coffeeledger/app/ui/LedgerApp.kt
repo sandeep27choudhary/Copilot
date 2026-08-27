@@ -256,6 +256,7 @@ fun LedgerApp(
                         enabled = state.settings.smsIngestionEnabled,
                         permissionGranted = smsPermissionGranted,
                         busy = busy,
+                        lastScanAt = state.settings.lastSmsScanAt,
                         lastScan = lastScan,
                         onRequestPermission = {
                             permissionLauncher.launch(
