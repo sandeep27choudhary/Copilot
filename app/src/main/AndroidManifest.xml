@@ -9,6 +9,15 @@
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
 
     <!--
+        SMS ingestion is one input among several — CSV import, PDF import and manual entry
+        all work without it — so a device with no telephony (a tablet, ChromeOS, Wear OS)
+        should still be able to install the app; SMS features are simply unavailable there.
+    -->
+    <uses-feature
+        android:name="android.hardware.telephony"
+        android:required="false" />
+
+    <!--
         There is deliberately no android.permission.INTERNET here. Without it the process
         cannot open a socket, so "your data stays on your device" is enforced by the
         platform rather than by our own good intentions.
