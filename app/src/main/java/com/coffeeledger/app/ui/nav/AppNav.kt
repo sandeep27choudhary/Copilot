@@ -40,9 +40,13 @@ object Routes {
     const val PRIVACY = "privacy"
     const val SMS = "sms"
     const val IMPORT = "import"
+    const val ACCOUNTS = "accounts"
+    const val ACCOUNT_EDIT = "account-edit/{id}"
+    const val ACCOUNT_NEW = "account-edit/new"
 
     fun transactionDetail(id: String) = "transaction/$id"
     fun trackerEdit(id: String) = "tracker-edit/$id"
+    fun accountEdit(id: String) = "account-edit/$id"
 }
 
 /** The five top-level destinations, in the order they appear in the bar. */

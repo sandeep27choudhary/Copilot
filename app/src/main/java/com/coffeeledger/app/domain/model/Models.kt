@@ -117,6 +117,9 @@ data class Txn(
     val countsAsIncome: Boolean get() = direction == Direction.CREDIT && !isTransfer
 }
 
+/** Where an account's current balance figure came from. */
+enum class BalanceSource { SMS, MANUAL }
+
 /** A bank account, card or wallet the user holds. */
 data class Account(
     val id: String,
@@ -126,6 +129,17 @@ data class Account(
     val type: AccountType,
     val openingBalanceMinor: Long = 0L,
     val includeInTotals: Boolean = true,
+    /**
+     * The latest balance actually reported for this account: the "Avl Bal" figure a bank
+     * SMS states after a transaction, or a figure the user typed in themselves. Whichever
+     * is more recent — by [balanceAsOf], not by when it happened to be saved — wins. Null
+     * until either has happened once, in which case the balance is derived instead (see
+     * [com.coffeeledger.app.domain.analytics.AnalyticsEngine.accountBalance]).
+     */
+    val currentBalanceMinor: Long? = null,
+    /** The moment [currentBalanceMinor] is true as of: the SMS's own timestamp, or "now" for a manual edit. */
+    val balanceAsOf: Long? = null,
+    val balanceSource: BalanceSource? = null,
 ) {
     val maskedLabel: String get() = if (tail.isNullOrBlank()) displayName else "•••• $tail"
 }

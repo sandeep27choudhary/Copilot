@@ -53,6 +53,10 @@ data class AccountEntity(
     val type: String,
     val openingBalanceMinor: Long,
     val includeInTotals: Boolean,
+    /** The bank's own stated balance, or one the user typed in — see [com.coffeeledger.app.domain.model.Account]. */
+    val currentBalanceMinor: Long? = null,
+    val balanceAsOf: Long? = null,
+    val balanceSource: String? = null,
 )
 
 @Entity(tableName = "trackers")

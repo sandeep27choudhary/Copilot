@@ -96,6 +96,16 @@ all become **Blinkit**. Matching is token-based, so `AMAZONITE JEWELLERS` is not
 never counted as spending, anywhere — not in the dashboard, not in a tracker, not in an
 insight, not in an advisor answer.
 
+**Accounts and balances.** A bank SMS carries its own post-transaction balance ("Avl Bal"),
+and that figure — not a sum of transactions the parser might have missed or misread — is
+what the total balance is built from. An account no message has named yet is created
+automatically the first time one arrives; a balance can also be corrected by hand from the
+Accounts screen, and stands until a newer bank-reported figure supersedes it. Only once
+neither has ever happened is a balance derived from that one account's own transaction
+history, and the dashboard says so rather than presenting a guess as settled fact. Turning
+on SMS reading also retires the seeded sample ledger — accounts, trackers and transactions
+alike — so real and demo data are never shown side by side.
+
 **Trackers.** One primitive covers a monthly cap, a category limit, a savings target and a
 long-running goal. Progress is derived from the ledger; goals can also hold a manually
 recorded starting amount.
@@ -149,11 +159,13 @@ ordinary JVM code:
 ./gradlew :app:testDebugUnitTest
 ```
 
-93 unit tests cover the SMS parser (real bank message formats, and the messages that must
-be rejected), merchant normalisation, categorisation precedence, transfer detection, money
-formatting, analytics, recurring detection, the health score, the advisor's intents, the
-timeline filter, the CSV importer and the PDF extractor (which is exercised against PDFs
-generated inside the test, both uncompressed and Flate-compressed).
+96 unit tests cover the SMS parser (real bank message formats, and the messages that must
+be rejected), merchant normalisation, categorisation precedence, transfer detection, account
+balance derivation (a bank-reported or manually-entered balance always outranks a sum
+computed from transactions), money formatting, analytics, recurring detection, the health
+score, the advisor's intents, the timeline filter, the CSV importer and the PDF extractor
+(which is exercised against PDFs generated inside the test, both uncompressed and
+Flate-compressed).
 
 `SampleLedgerTest` pins the seeded ledger to the figures in the product brief — ₹78,632
 spent, ₹16,695 received, ₹61,937 net outflow, groceries at 93% of ₹15,000, food at 70% of

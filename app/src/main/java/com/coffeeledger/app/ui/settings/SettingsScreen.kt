@@ -30,6 +30,7 @@ fun SettingsScreen(
     onOpenPrivacy: () -> Unit,
     onOpenSms: () -> Unit,
     onOpenImport: () -> Unit,
+    onOpenAccounts: () -> Unit,
     onExportBackup: () -> Unit,
     onExportCsv: () -> Unit,
     onRestoreBackup: () -> Unit,
@@ -62,6 +63,19 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.height(14.dp))
                 NavigationRow(title = "Privacy", description = "What is stored, and where", onClick = onOpenPrivacy)
+            }
+            Spacer(Modifier.height(24.dp))
+        }
+
+        item {
+            SectionLabel("Accounts")
+            Spacer(Modifier.height(8.dp))
+            PaperCard(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)) {
+                NavigationRow(
+                    title = "Your accounts",
+                    description = "${state.snapshot.accounts.size} accounts · balance ${Money.format(state.snapshot.totalBalanceMinor)}",
+                    onClick = onOpenAccounts,
+                )
             }
             Spacer(Modifier.height(24.dp))
         }

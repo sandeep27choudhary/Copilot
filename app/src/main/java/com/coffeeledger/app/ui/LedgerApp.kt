@@ -40,6 +40,8 @@ import com.coffeeledger.app.ui.insights.InsightsScreen
 import com.coffeeledger.app.ui.nav.BottomDestination
 import com.coffeeledger.app.ui.nav.CoffeeBottomBar
 import com.coffeeledger.app.ui.nav.Routes
+import com.coffeeledger.app.ui.settings.AccountEditScreen
+import com.coffeeledger.app.ui.settings.AccountsScreen
 import com.coffeeledger.app.ui.settings.ImportScreen
 import com.coffeeledger.app.ui.settings.PermissionState
 import com.coffeeledger.app.ui.settings.PrivacyScreen
@@ -165,6 +167,7 @@ fun LedgerApp(
                         onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
                         onOpenSms = { navController.navigate(Routes.SMS) },
                         onOpenImport = { navController.navigate(Routes.IMPORT) },
+                        onOpenAccounts = { navController.navigate(Routes.ACCOUNTS) },
                         onExportBackup = {
                             backupSaver.launch(DataTransfer.backupFileName(System.currentTimeMillis()))
                         },
@@ -238,6 +241,35 @@ fun LedgerApp(
 
                 composable(Routes.ADVISOR) {
                     AdvisorScreen(state = state, onBack = { navController.popBackStack() })
+                }
+
+                composable(Routes.ACCOUNTS) {
+                    AccountsScreen(
+                        accounts = state.snapshot.accounts,
+                        transactions = state.snapshot.transactions,
+                        onOpenAccount = { navController.navigate(Routes.accountEdit(it)) },
+                        onAddAccount = { navController.navigate(Routes.ACCOUNT_NEW) },
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+
+                composable(Routes.ACCOUNT_EDIT) { entry ->
+                    val id = entry.arguments?.getString("id").orEmpty()
+                    val existing = state.snapshot.accounts.firstOrNull { it.id == id }
+                    AccountEditScreen(
+                        existing = existing,
+                        onSave = {
+                            viewModel.saveAccount(it)
+                            navController.popBackStack()
+                        },
+                        onDelete = existing?.let {
+                            { accountId: String ->
+                                viewModel.deleteAccount(accountId)
+                                navController.popBackStack()
+                            }
+                        },
+                        onBack = { navController.popBackStack() },
+                    )
                 }
 
                 composable(Routes.PRIVACY) {

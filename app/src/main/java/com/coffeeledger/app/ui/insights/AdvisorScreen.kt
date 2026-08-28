@@ -68,7 +68,7 @@ fun AdvisorScreen(
             txns = state.snapshot.transactions,
             trackerProgress = state.trackers,
             now = state.now,
-            openingBalanceMinor = state.snapshot.openingBalanceMinor,
+            accounts = state.snapshot.accounts,
         )
     }
 

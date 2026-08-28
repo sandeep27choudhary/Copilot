@@ -73,7 +73,7 @@ fun HomeScreen(
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "Across ${state.snapshot.accounts.count { it.includeInTotals }} accounts on this device",
+                    text = balanceCaption(state),
                     style = CoffeeType.Caption,
                     color = colors.textTertiary,
                 )
@@ -240,6 +240,21 @@ fun HomeScreen(
                 )
             }
         }
+    }
+}
+
+/**
+ * Says how many accounts the total covers, and — when at least one is still a derived
+ * guess rather than a bank-confirmed figure — says so, instead of presenting a number
+ * that could be wrong as if it were certain.
+ */
+private fun balanceCaption(state: LedgerUiState): String {
+    val included = state.snapshot.accounts.count { it.includeInTotals }
+    val accountsLabel = "Across $included account${if (included == 1) "" else "s"} on this device"
+    return if (state.snapshot.balanceIsConfirmed || included == 0) {
+        accountsLabel
+    } else {
+        "$accountsLabel · not yet confirmed by your bank"
     }
 }
 

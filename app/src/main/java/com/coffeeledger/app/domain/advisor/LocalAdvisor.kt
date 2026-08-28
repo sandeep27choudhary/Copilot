@@ -3,6 +3,7 @@ package com.coffeeledger.app.domain.advisor
 import com.coffeeledger.app.domain.analytics.AnalyticsEngine
 import com.coffeeledger.app.domain.analytics.TimeRange
 import com.coffeeledger.app.domain.analytics.TimeRanges
+import com.coffeeledger.app.domain.model.Account
 import com.coffeeledger.app.domain.model.Category
 import com.coffeeledger.app.domain.model.Direction
 import com.coffeeledger.app.domain.model.TrackerKind
@@ -18,7 +19,7 @@ data class AdvisorContext(
     val txns: List<Txn>,
     val trackerProgress: List<TrackerProgress>,
     val now: Long,
-    val openingBalanceMinor: Long = 0L,
+    val accounts: List<Account> = emptyList(),
     val zone: ZoneId = ZoneId.systemDefault(),
 )
 
@@ -205,7 +206,7 @@ object LocalAdvisor {
     }
 
     private fun balance(context: AdvisorContext): AdvisorAnswer {
-        val balance = AnalyticsEngine.totalBalance(context.txns, context.openingBalanceMinor)
+        val balance = AnalyticsEngine.totalBalance(context.accounts, context.txns)
         return AdvisorAnswer(
             intent = AdvisorIntent.BALANCE,
             headline = Money.format(balance),
@@ -300,7 +301,7 @@ object LocalAdvisor {
             headline = "How much is it?",
             detail = listOf("Include the amount, for example \"Can I afford a ₹60,000 purchase?\""),
         )
-        val balance = AnalyticsEngine.totalBalance(context.txns, context.openingBalanceMinor)
+        val balance = AnalyticsEngine.totalBalance(context.accounts, context.txns)
         val lastMonth = AnalyticsEngine.summarize(context.txns, TimeRanges.previousMonth(context.now, context.zone))
         val monthlySurplus = lastMonth.netMinor
         val goals = context.trackerProgress.filter { it.tracker.kind != TrackerKind.SPENDING_LIMIT }

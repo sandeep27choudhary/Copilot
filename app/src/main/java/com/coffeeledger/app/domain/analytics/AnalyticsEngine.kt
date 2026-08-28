@@ -1,5 +1,6 @@
 package com.coffeeledger.app.domain.analytics
 
+import com.coffeeledger.app.domain.model.Account
 import com.coffeeledger.app.domain.model.Category
 import com.coffeeledger.app.domain.model.Direction
 import com.coffeeledger.app.domain.model.Tracker
@@ -80,9 +81,24 @@ object AnalyticsEngine {
         return PeriodSummary(range, income, spend, transferIn, transferOut, window.size)
     }
 
-    /** Running balance across every account, from opening balances plus the ledger. */
-    fun totalBalance(txns: List<Txn>, openingBalanceMinor: Long = 0L): Long =
-        openingBalanceMinor + txns.sumOf { it.signedMinor }
+    /**
+     * The best known balance for one account.
+     *
+     * A figure the bank itself stated (an SMS's "Avl Bal") or the user typed in is ground
+     * truth and always wins over a sum of transactions: a derived sum silently drifts the
+     * moment a single message is missed, misread, or arrives out of order, while a reported
+     * balance cannot. Only before either has ever happened is a balance derived at all, and
+     * even then only from that one account's own transactions — never the whole ledger's.
+     */
+    fun accountBalance(account: Account, txns: List<Txn>): Long =
+        account.currentBalanceMinor ?: (
+            account.openingBalanceMinor +
+                txns.filter { it.accountId == account.id }.sumOf { it.signedMinor }
+            )
+
+    /** Total balance across every account counted toward it. See [accountBalance]. */
+    fun totalBalance(accounts: List<Account>, txns: List<Txn>): Long =
+        accounts.filter { it.includeInTotals }.sumOf { accountBalance(it, txns) }
 
     fun categoryTotals(
         txns: List<Txn>,

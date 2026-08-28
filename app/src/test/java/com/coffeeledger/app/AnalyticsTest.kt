@@ -6,6 +6,9 @@ import com.coffeeledger.app.domain.analytics.FinancialHealth
 import com.coffeeledger.app.domain.analytics.InsightGenerator
 import com.coffeeledger.app.domain.analytics.InsightKind
 import com.coffeeledger.app.domain.analytics.TimeRanges
+import com.coffeeledger.app.domain.model.Account
+import com.coffeeledger.app.domain.model.AccountType
+import com.coffeeledger.app.domain.model.BalanceSource
 import com.coffeeledger.app.domain.model.Category
 import com.coffeeledger.app.domain.model.Direction
 import com.coffeeledger.app.domain.model.PaymentMethod
@@ -23,10 +26,77 @@ class AnalyticsTest {
     private val progress = AnalyticsEngine.progressOf(SampleData.trackers(), txns, now, zone)
 
     @Test
-    fun `balance is opening balances plus every signed entry`() {
-        val opening = SampleData.accounts().filter { it.includeInTotals }.sumOf { it.openingBalanceMinor }
-        val expected = opening + txns.sumOf { it.signedMinor }
-        assertEquals(expected, AnalyticsEngine.totalBalance(txns, opening))
+    fun `an account with no reported balance falls back to opening balance plus its own transactions`() {
+        val account = Account(
+            id = "acc-1",
+            displayName = "Test",
+            institution = "Test Bank",
+            tail = "1234",
+            type = AccountType.BANK,
+            openingBalanceMinor = 10_000_00L,
+        )
+        val ownTxn = Txn(
+            id = "t1",
+            occurredAt = now,
+            amountMinor = 500_00L,
+            direction = Direction.DEBIT,
+            merchant = "Blinkit",
+            category = Category.GROCERIES,
+            accountId = "acc-1",
+        )
+        val otherAccountTxn = ownTxn.copy(id = "t2", accountId = "acc-2", amountMinor = 999_00L)
+        assertEquals(
+            9_500_00L,
+            AnalyticsEngine.accountBalance(account, listOf(ownTxn, otherAccountTxn)),
+        )
+    }
+
+    @Test
+    fun `a reported balance always wins over the derived sum, however stale the sum is`() {
+        val account = Account(
+            id = "acc-1",
+            displayName = "Test",
+            institution = "Test Bank",
+            tail = "1234",
+            type = AccountType.BANK,
+            openingBalanceMinor = 10_000_00L,
+            currentBalanceMinor = 42_00L,
+            balanceAsOf = now,
+            balanceSource = BalanceSource.SMS,
+        )
+        val ownTxn = Txn(
+            id = "t1",
+            occurredAt = now,
+            amountMinor = 500_00L,
+            direction = Direction.DEBIT,
+            merchant = "Blinkit",
+            category = Category.GROCERIES,
+            accountId = "acc-1",
+        )
+        assertEquals(42_00L, AnalyticsEngine.accountBalance(account, listOf(ownTxn)))
+    }
+
+    @Test
+    fun `total balance sums only accounts marked to be included`() {
+        val included = Account(
+            id = "acc-in",
+            displayName = "Included",
+            institution = "Bank",
+            tail = "1111",
+            type = AccountType.BANK,
+            currentBalanceMinor = 100_00L,
+        )
+        val excluded = included.copy(id = "acc-out", tail = "2222", includeInTotals = false, currentBalanceMinor = 999_00L)
+        assertEquals(100_00L, AnalyticsEngine.totalBalance(listOf(included, excluded), emptyList()))
+    }
+
+    @Test
+    fun `sample ledger total balance matches the sum of its own per-account derivations`() {
+        val accounts = SampleData.accounts()
+        val expected = accounts.filter { it.includeInTotals }
+            .sumOf { AnalyticsEngine.accountBalance(it, txns) }
+        assertEquals(expected, AnalyticsEngine.totalBalance(accounts, txns))
+        assertTrue(expected != 0L)
     }
 
     @Test

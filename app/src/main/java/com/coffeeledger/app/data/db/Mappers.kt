@@ -11,6 +11,7 @@ import com.coffeeledger.app.domain.analytics.InsightTone
 import com.coffeeledger.app.domain.categorize.CategoryRule
 import com.coffeeledger.app.domain.model.Account
 import com.coffeeledger.app.domain.model.AccountType
+import com.coffeeledger.app.domain.model.BalanceSource
 import com.coffeeledger.app.domain.model.Category
 import com.coffeeledger.app.domain.model.CategorySource
 import com.coffeeledger.app.domain.model.Direction
@@ -103,6 +104,9 @@ fun AccountEntity.toDomain(): Account = Account(
     type = enumOrDefault(type, AccountType.BANK),
     openingBalanceMinor = openingBalanceMinor,
     includeInTotals = includeInTotals,
+    currentBalanceMinor = currentBalanceMinor,
+    balanceAsOf = balanceAsOf,
+    balanceSource = enumOrNull<BalanceSource>(balanceSource),
 )
 
 fun Account.toEntity(): AccountEntity = AccountEntity(
@@ -113,6 +117,9 @@ fun Account.toEntity(): AccountEntity = AccountEntity(
     type = type.name,
     openingBalanceMinor = openingBalanceMinor,
     includeInTotals = includeInTotals,
+    currentBalanceMinor = currentBalanceMinor,
+    balanceAsOf = balanceAsOf,
+    balanceSource = balanceSource?.name,
 )
 
 fun TrackerEntity.toDomain(): Tracker = Tracker(
@@ -183,6 +190,9 @@ fun Insight.toEntity(generatedAt: Long = System.currentTimeMillis()): InsightEnt
 
 private inline fun <reified T : Enum<T>> enumOrDefault(name: String, fallback: T): T =
     enumValues<T>().firstOrNull { it.name == name } ?: fallback
+
+private inline fun <reified T : Enum<T>> enumOrNull(name: String?): T? =
+    name?.let { key -> enumValues<T>().firstOrNull { it.name == key } }
 
 private fun String.splitCsv(): List<String> =
     split(",").map { it.trim() }.filter { it.isNotEmpty() }

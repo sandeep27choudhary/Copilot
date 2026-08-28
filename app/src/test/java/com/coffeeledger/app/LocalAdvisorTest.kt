@@ -19,7 +19,7 @@ class LocalAdvisorTest {
         txns = txns,
         trackerProgress = AnalyticsEngine.progressOf(SampleData.trackers(), txns, now, zone),
         now = now,
-        openingBalanceMinor = SampleData.accounts().filter { it.includeInTotals }.sumOf { it.openingBalanceMinor },
+        accounts = SampleData.accounts(),
         zone = zone,
     )
 

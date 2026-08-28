@@ -26,6 +26,7 @@ import com.coffeeledger.app.domain.importer.ImportException
 import com.coffeeledger.app.domain.importer.ImportReport
 import com.coffeeledger.app.domain.importer.PdfStatementParser
 import com.coffeeledger.app.domain.importer.PdfTextExtractor
+import com.coffeeledger.app.domain.model.Account
 import com.coffeeledger.app.domain.model.Category
 import com.coffeeledger.app.domain.model.SourceType
 import com.coffeeledger.app.domain.model.Tracker
@@ -142,10 +143,23 @@ class LedgerViewModel(
         }
     }
 
+    /**
+     * Turning SMS reading on is also the point at which the sample ledger has to go: real
+     * transactions and the fictional demo ones must never sit in the same ledger, so the
+     * demo accounts, trackers and transactions are purged the moment real data can start
+     * arriving, not left for the user to remember to clear out later.
+     */
     fun setSmsIngestionEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setSmsIngestionEnabled(enabled)
-            if (!enabled) _lastScan.value = null
+            if (!enabled) {
+                _lastScan.value = null
+                return@launch
+            }
+            // Idempotent: a no-op once the sample ledger is already gone.
+            repository.removeSampleData()
+            settingsRepository.setSampleDataPresent(false)
+            repository.ensureStarterTrackers()
         }
     }
 
@@ -267,6 +281,30 @@ class LedgerViewModel(
     }
 
     suspend fun nextTrackerSortOrder(): Int = repository.nextTrackerSortOrder()
+
+    // ---------------------------------------------------------- accounts
+
+    fun saveAccount(account: Account) {
+        viewModelScope.launch {
+            repository.saveAccount(account)
+            _toast.value = Toast("${account.displayName} saved.")
+        }
+    }
+
+    fun deleteAccount(id: String) {
+        viewModelScope.launch {
+            repository.deleteAccount(id)
+            _toast.value = Toast("Account removed.")
+        }
+    }
+
+    /** A user-entered correction; always wins until a newer bank-reported balance arrives. */
+    fun updateAccountBalance(accountId: String, newBalanceMinor: Long) {
+        viewModelScope.launch {
+            repository.updateAccountBalance(accountId, newBalanceMinor, System.currentTimeMillis())
+            _toast.value = Toast("Balance updated.")
+        }
+    }
 
     fun dismissInsight(id: String) {
         viewModelScope.launch { repository.dismissInsight(id) }

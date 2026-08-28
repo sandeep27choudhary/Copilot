@@ -12,6 +12,8 @@ import com.coffeeledger.app.domain.categorize.CategoryRule
 import com.coffeeledger.app.domain.categorize.Categorizer
 import com.coffeeledger.app.domain.importer.ImportedRow
 import com.coffeeledger.app.domain.model.Account
+import com.coffeeledger.app.domain.model.AccountType
+import com.coffeeledger.app.domain.model.BalanceSource
 import com.coffeeledger.app.domain.model.Category
 import com.coffeeledger.app.domain.model.CategorySource
 import com.coffeeledger.app.domain.model.Direction
@@ -33,16 +35,15 @@ data class LedgerSnapshot(
     val trackers: List<Tracker>,
     val rules: List<CategoryRule>,
 ) {
-    val openingBalanceMinor: Long
-        get() = accounts.filter { it.includeInTotals }.sumOf { it.openingBalanceMinor }
-
+    /** See [AnalyticsEngine.totalBalance]: each account's own reported balance where one exists. */
     val totalBalanceMinor: Long
-        get() = AnalyticsEngine.totalBalance(transactions.filter { includesAccount(it.accountId) }, openingBalanceMinor)
+        get() = AnalyticsEngine.totalBalance(accounts, transactions)
 
-    private fun includesAccount(accountId: String?): Boolean {
-        if (accountId == null) return true
-        return accounts.firstOrNull { it.id == accountId }?.includeInTotals ?: true
-    }
+    /** True once every counted account has an actual reported balance rather than a derived guess. */
+    val balanceIsConfirmed: Boolean
+        get() = accounts.filter { it.includeInTotals }.let { included ->
+            included.isNotEmpty() && included.all { it.currentBalanceMinor != null }
+        }
 
     val ownAccountTails: Set<String>
         get() = accounts.mapNotNull { it.tail }.toSet()
@@ -81,13 +82,26 @@ class LedgerRepository(private val db: AppDatabase) {
 
     /**
      * Converts parsed messages into ledger entries and stores the ones not already present.
+     *
+     * Two things happen here beyond ordinary categorisation. First, a message naming an
+     * account tail this device has never seen before creates that account automatically —
+     * otherwise the transaction would have nowhere to attach, and the total balance would
+     * silently never include it. Second, whenever a message states the bank's own post-
+     * transaction balance ("Avl Bal"), that figure updates the account's [Account.currentBalanceMinor]
+     * if it is more recent than whatever the account already has — a real bank balance beats
+     * any sum we could derive from a possibly-incomplete transaction history.
+     *
      * @return how many new transactions were added.
      */
     suspend fun ingestParsed(parsed: List<ParsedTransaction>): Int {
         if (parsed.isEmpty()) return 0
-        val accounts = db.accountDao().all().map { it.toDomain() }
+        val storedAccounts = db.accountDao().all().map { it.toDomain() }
+        val accountsById = storedAccounts.associateBy { it.id }.toMutableMap()
+        val newAccountIds = mutableSetOf<String>()
         val rules = db.ruleDao().categoryRules().map { it.toDomain() }
-        val ownTails = accounts.mapNotNull { it.tail }.toSet()
+        val ownTails = storedAccounts.mapNotNull { it.tail }.toSet()
+        // The latest (occurredAt, balanceMinor) reported for each account across this batch.
+        val bestBalanceByAccount = mutableMapOf<String, Pair<Long, Long>>()
 
         val entities = parsed.map { item ->
             val categorization = Categorizer.categorize(
@@ -98,7 +112,13 @@ class LedgerRepository(private val db: AppDatabase) {
                 ownAccountTails = ownTails,
                 counterpartyTail = counterpartyTail(item, ownTails),
             )
-            val account = accounts.firstOrNull { it.tail != null && it.tail == item.accountTail }
+            val account = resolveAccount(item, accountsById, newAccountIds)
+            if (account != null && item.balanceMinor != null) {
+                val best = bestBalanceByAccount[account.id]
+                if (best == null || item.occurredAt > best.first) {
+                    bestBalanceByAccount[account.id] = item.occurredAt to item.balanceMinor
+                }
+            }
             val txn = Txn(
                 id = UUID.randomUUID().toString(),
                 occurredAt = item.occurredAt,
@@ -124,9 +144,62 @@ class LedgerRepository(private val db: AppDatabase) {
                 smsSender = item.sender,
             )
         }
+
+        val accountsToSave = mutableListOf<Account>()
+        bestBalanceByAccount.forEach { (accountId, latest) ->
+            val (occurredAt, balanceMinor) = latest
+            val account = accountsById[accountId] ?: return@forEach
+            if (account.balanceAsOf == null || occurredAt > account.balanceAsOf) {
+                accountsById[accountId] = account.copy(
+                    currentBalanceMinor = balanceMinor,
+                    balanceAsOf = occurredAt,
+                    balanceSource = BalanceSource.SMS,
+                )
+            }
+        }
+        // A newly auto-created account needs saving even without a balance figure yet;
+        // an existing account only needs saving if its balance actually moved.
+        (newAccountIds + bestBalanceByAccount.keys).distinct()
+            .mapNotNull { accountsById[it] }
+            .let { accountsToSave.addAll(it) }
+        if (accountsToSave.isNotEmpty()) db.accountDao().upsertAll(accountsToSave)
+
         val inserted = db.transactionDao().insertIgnoringDuplicates(entities)
         return inserted.count { it >= 0 }
     }
+
+    /**
+     * Finds the account a message's tail refers to, preferring one whose institution also
+     * matches when the message names one, and creates a new account when nothing matches —
+     * a message with no tail at all cannot be attached to a specific account.
+     */
+    private fun resolveAccount(
+        item: ParsedTransaction,
+        accountsById: MutableMap<String, Account>,
+        newAccountIds: MutableSet<String>,
+    ): Account? {
+        val tail = item.accountTail ?: return null
+        val candidates = accountsById.values.filter { it.tail == tail }
+        candidates.firstOrNull { candidate ->
+            item.institution != null && candidate.institution.equals(item.institution, ignoreCase = true)
+        }?.let { return it }
+        candidates.firstOrNull()?.let { return it }
+
+        val institution = item.institution ?: "Unknown bank"
+        val created = Account(
+            id = syntheticAccountId(institution, tail),
+            displayName = institution,
+            institution = institution,
+            tail = tail,
+            type = AccountType.BANK,
+        )
+        accountsById[created.id] = created
+        newAccountIds += created.id
+        return created
+    }
+
+    private fun syntheticAccountId(institution: String, tail: String): String =
+        "acc-sms-" + institution.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-') + "-" + tail
 
     /** Stores rows read from a CSV or PDF statement against the account the user chose. */
     suspend fun ingestImported(
@@ -225,6 +298,22 @@ class LedgerRepository(private val db: AppDatabase) {
 
     suspend fun deleteAccount(id: String) = db.accountDao().delete(id)
 
+    /**
+     * A user-entered correction. It always takes effect immediately — "as of right now, my
+     * balance is X" — but a later bank-reported balance (a newer SMS) can still supersede it,
+     * exactly as one manual edit can supersede an earlier one.
+     */
+    suspend fun updateAccountBalance(accountId: String, newBalanceMinor: Long, now: Long) {
+        val account = db.accountDao().all().firstOrNull { it.id == accountId }?.toDomain() ?: return
+        db.accountDao().upsert(
+            account.copy(
+                currentBalanceMinor = newBalanceMinor,
+                balanceAsOf = now,
+                balanceSource = BalanceSource.MANUAL,
+            ).toEntity(),
+        )
+    }
+
     // ---------------------------------------------------------- insights
 
     /** Recomputes insights from local data and caches them for the Insights screen. */
@@ -252,10 +341,18 @@ class LedgerRepository(private val db: AppDatabase) {
         return true
     }
 
-    /** Removes the sample rows without touching anything the user added themselves. */
+    /**
+     * Removes every trace of the seeded demo — its transactions, the four demo accounts and
+     * the trackers built for them — without touching anything the user added or edited
+     * themselves. Real data and sample data must never coexist: a real balance sitting next
+     * to a fictional "HDFC Everyday" account would not be "correct data based on transaction
+     * messages", it would be a demo half-cleaned-up.
+     */
     suspend fun removeSampleData(): Int {
         val samples = db.transactionDao().all().filter { it.dedupeKey.startsWith("sample:") }
         samples.forEach { db.transactionDao().delete(it.id) }
+        SampleData.accounts().forEach { db.accountDao().delete(it.id) }
+        SampleData.trackers().forEach { db.trackerDao().delete(it.id) }
         return samples.size
     }
 

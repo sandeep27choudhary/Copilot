@@ -3,6 +3,7 @@ package com.coffeeledger.app.data.io
 import com.coffeeledger.app.data.repo.LedgerSnapshot
 import com.coffeeledger.app.domain.model.Account
 import com.coffeeledger.app.domain.model.AccountType
+import com.coffeeledger.app.domain.model.BalanceSource
 import com.coffeeledger.app.domain.model.Category
 import com.coffeeledger.app.domain.model.CategorySource
 import com.coffeeledger.app.domain.model.Direction
@@ -68,7 +69,10 @@ object DataTransfer {
                             .put("tail", account.tail ?: JSONObject.NULL)
                             .put("type", account.type.name)
                             .put("openingBalanceMinor", account.openingBalanceMinor)
-                            .put("includeInTotals", account.includeInTotals),
+                            .put("includeInTotals", account.includeInTotals)
+                            .put("currentBalanceMinor", account.currentBalanceMinor ?: JSONObject.NULL)
+                            .put("balanceAsOf", account.balanceAsOf ?: JSONObject.NULL)
+                            .put("balanceSource", account.balanceSource?.name ?: JSONObject.NULL),
                     )
                 }
             },
@@ -163,6 +167,10 @@ object DataTransfer {
                 type = enumOrDefault(item.optString("type"), AccountType.BANK),
                 openingBalanceMinor = item.optLong("openingBalanceMinor"),
                 includeInTotals = item.optBoolean("includeInTotals", true),
+                currentBalanceMinor = item.optLongOrNull("currentBalanceMinor"),
+                balanceAsOf = item.optLongOrNull("balanceAsOf"),
+                balanceSource = item.optStringOrNull("balanceSource")
+                    ?.let { key -> BalanceSource.entries.firstOrNull { it.name == key } },
             )
         }
 
@@ -231,6 +239,11 @@ object DataTransfer {
     private fun JSONObject.optStringOrNull(key: String): String? {
         if (!has(key) || isNull(key)) return null
         return optString(key).takeIf { it.isNotBlank() }
+    }
+
+    private fun JSONObject.optLongOrNull(key: String): Long? {
+        if (!has(key) || isNull(key)) return null
+        return optLong(key)
     }
 
     private inline fun <reified T : Enum<T>> enumOrDefault(name: String, fallback: T): T =
