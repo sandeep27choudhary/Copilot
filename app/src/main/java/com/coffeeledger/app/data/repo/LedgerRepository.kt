@@ -162,7 +162,7 @@ class LedgerRepository(private val db: AppDatabase) {
         (newAccountIds + bestBalanceByAccount.keys).distinct()
             .mapNotNull { accountsById[it] }
             .let { accountsToSave.addAll(it) }
-        if (accountsToSave.isNotEmpty()) db.accountDao().upsertAll(accountsToSave)
+        if (accountsToSave.isNotEmpty()) db.accountDao().upsertAll(accountsToSave.map { it.toEntity() })
 
         val inserted = db.transactionDao().insertIgnoringDuplicates(entities)
         return inserted.count { it >= 0 }
